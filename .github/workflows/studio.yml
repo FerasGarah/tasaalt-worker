@@ -1,0 +1,60 @@
+# Tasaalt Studio — cloud worker. Started by the studio server; do not run by hand.
+name: studio
+run-name: "${{ inputs.task }} · ${{ inputs.job }}"
+
+on:
+  workflow_dispatch:
+    inputs:
+      task:
+        description: "ping | preview | render | align"
+        required: true
+        default: ping
+      job:
+        description: "Job id"
+        required: true
+      server:
+        description: "Studio worker URL"
+        required: true
+      token:
+        description: "One-time job secret"
+        required: true
+
+permissions:
+  contents: read
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    env:
+      TASK: ${{ inputs.task }}
+      JOB: ${{ inputs.job }}
+      SERVER: ${{ inputs.server }}
+      TOKEN: ${{ inputs.token }}
+    steps:
+      - name: Hide secret
+        run: echo "::add-mask::$TOKEN"
+
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install
+        run: npm ci --no-audit --no-fund
+
+      - name: Install speech model (alignment only)
+        if: inputs.task == 'align'
+        run: npm install --no-save --no-audit --no-fund @xenova/transformers@2.17.2 sts-whisper-tiny@1.0.0
+
+      - name: Work
+        run: node worker.js
+
+      - name: Report failure to the studio
+        if: failure() || cancelled()
+        run: |
+          curl -sS -m 30 -X POST -H "Content-Type: application/json" \
+            -d '{"ok":false,"error":"توقف العامل السحابي (فشل التثبيت أو أُلغي التشغيل). راجع سجل GitHub Actions."}' \
+            "$SERVER?a=finish&job=$JOB&t=$TOKEN" || true
