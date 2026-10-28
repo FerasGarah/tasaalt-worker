@@ -1,0 +1,13 @@
+{
+  "name": "tasaalt-studio-worker",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Cloud worker for Tasaalt Studio (runs on GitHub Actions)",
+  "main": "worker.js",
+  "dependencies": {
+    "@fontsource/tajawal": "5.0.8",
+    "ffmpeg-static": "5.2.0",
+    "gsap": "3.12.5",
+    "playwright-core": "1.47.2"
+  }
+}
