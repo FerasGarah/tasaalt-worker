@@ -10,4 +10,4 @@ studio installer — you don't need to edit anything.
 - `lib/media.js` — ffmpeg helpers.
 - `.github/workflows/studio.yml` — the Actions workflow (manual dispatch only).
 
-Keep this repository **private**.
+The repository can be public: the studio address and key are stored as encrypted Actions secrets and never appear in logs.
