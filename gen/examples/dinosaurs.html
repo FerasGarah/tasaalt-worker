@@ -1,0 +1,450 @@
+<title>كيف اختفت الديناصورات</title>
+<div id="app"></div>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/gsap/3.12.5/gsap.min.js"></script>
+<script src="story-engine.js"></script>
+<script>
+/* Timed to voice.mp3 (89.56 s), word-aligned with whisper-tiny. L(t) converts absolute seconds to chapter time.
+   Scene words stay above y≈520 (caption band in the exported video). */
+(function(){
+var AT={hook:0, rock:11.4, chain:27.8, sky:45.2, cold:58.9, end:72.5};
+
+function sub(S,g,bg){ var s=S('g',{opacity:0},g); if(bg) S('rect',{x:0,y:0,width:360,height:640,fill:bg},s); return s; }
+function cut(tl,from,to,at){ if(from) tl.to(from,{opacity:0,duration:0.3},at); tl.to(to,{opacity:1,duration:0.3},at); }
+
+// Long-neck sauropod, feet at (x,y). Returns outer group (fixed) and inner group (for motion).
+function sauropod(S,p,x,y,s,col){
+  var o=S('g',{transform:'translate('+x+' '+y+') scale('+s+')'},p), g=S('g',{},o);
+  col=col||'#6b8f47';
+  S('path',{d:'M-60 -62 Q-120 -50 -170 -20 Q-118 -40 -56 -44Z',fill:col},g);
+  [[-40,0],[-14,0],[22,0],[46,0]].forEach(function(l){ S('rect',{x:l[0]-8,y:-46,width:16,height:46,rx:5,fill:col},g); });
+  S('ellipse',{cx:0,cy:-62,rx:72,ry:34,fill:col},g);
+  S('path',{d:'M48 -76 Q84 -110 104 -168',fill:'none',stroke:col,'stroke-width':20,'stroke-linecap':'round'},g);
+  S('ellipse',{cx:114,cy:-174,rx:18,ry:11,fill:col},g);
+  S('circle',{cx:120,cy:-178,r:2.5,fill:'#101820'},g);
+  S('path',{d:'M-40 -84 Q0 -98 40 -86',fill:'none',stroke:'#00000025','stroke-width':6,'stroke-linecap':'round'},g);
+  return {o:o,g:g};
+}
+// T-rex, feet at (x,y), facing left.
+function trex(S,p,x,y,s,col){
+  var o=S('g',{transform:'translate('+x+' '+y+') scale('+s+')'},p), g=S('g',{},o);
+  col=col||'#8a5a3a';
+  S('path',{d:'M30 -78 Q100 -70 150 -40 Q96 -58 28 -58Z',fill:col},g);
+  S('path',{d:'M6 -60 L-4 0 L12 0 L22 -58Z',fill:col},g);
+  S('path',{d:'M30 -60 L28 0 L44 0 L46 -58Z',fill:col},g);
+  S('ellipse',{cx:18,cy:-82,rx:44,ry:28,fill:col,transform:'rotate(-18 18 -82)'},g);
+  S('path',{d:'M-14 -100 L-30 -130 L-84 -128 Q-96 -118 -90 -104 L-58 -100 L-60 -92 L-24 -88Z',fill:col},g);
+  S('path',{d:'M-86 -104 L-80 -98 L-74 -104 L-68 -98 L-62 -104',fill:'none',stroke:'#f4e9d8','stroke-width':2.5},g);
+  S('circle',{cx:-42,cy:-120,r:3,fill:'#101820'},g);
+  S('path',{d:'M-8 -76 L-20 -66 L-16 -62',fill:'none',stroke:col,'stroke-width':6,'stroke-linecap':'round'},g);
+  return {o:o,g:g};
+}
+function fern(S,p,x,y,s,col){
+  var g=S('g',{transform:'translate('+x+' '+y+') scale('+(s||1)+')'},p);
+  for(var i=-2;i<=2;i++) S('path',{d:'M0 0 Q'+(i*14)+' -30 '+(i*26)+' -52',fill:'none',stroke:col||'#3f7a3f','stroke-width':6,'stroke-linecap':'round'},g);
+  return g;
+}
+function mushroom(S,p,x,y,s){
+  var g=S('g',{transform:'translate('+x+' '+y+') scale('+s+')'},p);
+  S('rect',{x:-5,y:-24,width:10,height:24,fill:'#f29e4c'},g);
+  S('ellipse',{cx:0,cy:-30,rx:18,ry:12,fill:'#ffb347'},g);
+  S('ellipse',{cx:0,cy:-34,rx:10,ry:6,fill:'#ffe066'},g);
+  S('ellipse',{cx:0,cy:0,rx:16,ry:4,fill:'#e4572e'},g);
+  return g;
+}
+function mammal(S,p,x,y,s){
+  var o=S('g',{transform:'translate('+x+' '+y+') scale('+s+')'},p), g=S('g',{},o);
+  S('path',{d:'M26 -10 Q50 -18 58 -4',fill:'none',stroke:'#8a6a4a','stroke-width':3,'stroke-linecap':'round'},g);
+  S('ellipse',{cx:0,cy:-14,rx:28,ry:15,fill:'#a07850'},g);
+  S('ellipse',{cx:-26,cy:-20,rx:14,ry:11,fill:'#a07850'},g);
+  S('circle',{cx:-22,cy:-32,r:6,fill:'#c99a70'},g);
+  S('circle',{cx:-34,cy:-22,r:2,fill:'#101820'},g);
+  S('circle',{cx:-40,cy:-18,r:2.5,fill:'#5a3a22'},g);
+  [[-14,0],[14,0]].forEach(function(l){ S('rect',{x:l[0]-3,y:-6,width:6,height:8,rx:2,fill:'#8a6a4a'},g); });
+  return {o:o,g:g};
+}
+
+Story.episode({
+  title:'كيف اختفت الديناصورات؟',
+  sub:'حلقة بصوت الراوي، دقيقة و30 ثانية',
+  audio:'voice.mp3',
+  length:89.56,
+  poster:3.8,
+  captions:[
+    [0.18,'هل تساءلت يومًا'],[2.0,'كيف اختفت الديناصورات فجأة'],[4.46,'بعد أن كانت المخلوقات الأقوى والمسيطرة'],[7.64,'على كوكب الأرض لأكثر من 160 مليون سنة؟'],
+    [11.7,'الإجابة تعود إلى قبل 66 مليون سنة'],[15.22,'عندما تقاطع مسار كوكبنا مع كويكب ضخم'],[18.58,'يقارب حجمه جبل إيفرست'],[21.44,'ليصطدم بالمكسيك بقوة تدميرية هائلة'],[24.72,'تعادل ملايين القنابل النووية'],
+    [28.14,'ولكن هل تعتقد أن هذا الاصطدام هو ما قتلها مباشرة؟'],[32.3,'في الواقع، الاصطدام كان مجرد البداية'],[35.9,'فقد أطلق سلسلة من الكوارث المرعبة'],[38.96,'زلازل مدمرة، حرائق غابات هائلة'],[41.84,'وموجات تسونامي عملاقة اجتاحت السواحل'],
+    [45.42,'إلا أن الكارثة الحقيقية كانت في السماء!'],[48.82,'حيث تصاعدت أطنان من الغبار والرماد والغازات السامة'],[52.98,'لتشكّل سحابة كثيفة حجبت أشعة الشمس'],[56.2,'عن الأرض لعدة سنوات متواصلة'],
+    [59.12,'ومع غياب الشمس، هبطت درجات الحرارة بشكل حاد'],[62.92,'وماتت النباتات'],[64.8,'وبانهيار السلسلة الغذائية'],[66.66,'ماتت الديناصورات العاشبة جوعًا'],[69.46,'ولحقتها سريعًا الديناصورات اللاحمة'],
+    [72.82,'وهكذا، انقرضت الديناصورات'],[75.68,'ومعها نحو 75% من أشكال الحياة على الأرض'],[79.46,'ليُطوى فصل العمالقة القاسي'],[81.9,'ويبدأ فصل جديد سمح للثدييات الصغيرة بالنجاة والتطور'],[86.0,'وصولًا إلى عالمنا الذي نعرفه اليوم!']
+  ],
+  chapters:[
+
+  // ===== 1. When dinosaurs ruled (0 – 11.4) =====
+  {at:AT.hook, build:function(g,tl,K){
+    var S=K.S, T=K.T, L=function(t){return t-AT.hook;};
+    var a=sub(S,g,'#f6d8a8');
+    S('rect',{x:0,y:200,width:360,height:160,fill:'#f2c98a'},a);
+    S('circle',{cx:290,cy:110,r:34,fill:'#ffb84d'},a);
+    S('path',{d:'M220 330 L270 230 L290 240 L320 330Z',fill:'#8a5a3a'},a);
+    var smoke=S('g',{},a);
+    [[275,220,14],[268,198,18],[280,172,22]].forEach(function(c){ S('circle',{cx:c[0],cy:c[1],r:c[2],fill:'#a89a8a',opacity:0.7},smoke); });
+    tl.to(smoke,{y:-20,opacity:0.4,duration:5.5,yoyo:true,repeat:1,ease:'sine.inOut'},0);
+    S('path',{d:'M0 330 Q90 300 180 324 T360 318 L360 640 L0 640Z',fill:'#7a9a4a'},a);
+    S('path',{d:'M0 420 Q180 400 360 424 V640 H0Z',fill:'#5e8040'},a);
+    for(var i=0;i<6;i++) fern(S,a,20+i*66,430+(i%2)*10,0.9,'#3f7a3f');
+    var big=sauropod(S,a,120,470,0.95,'#6b8f47');
+    var small=sauropod(S,a,40,380,0.38,'#7aa04f');
+    var rex=trex(S,a,290,480,0.9,'#8a5a3a');
+    tl.to(big.g,{y:-3,duration:0.6,yoyo:true,repeat:17,ease:'sine.inOut'},0);
+    tl.to(rex.g,{rotation:-3,svgOrigin:'20 0',duration:0.8,yoyo:true,repeat:13,ease:'sine.inOut'},0);
+    var birds=S('g',{},a);
+    [[30,250],[60,240],[90,256]].forEach(function(b){ S('path',{d:'M'+b[0]+' '+b[1]+' q8 -8 16 0 q8 -8 16 0',fill:'none',stroke:'#5a3a22','stroke-width':2.5},birds); });
+    tl.to(birds,{x:150,y:-30,duration:11,ease:'none'},0);
+    cut(tl,null,a,0);
+    var q1=T(g,'هل تساءلت يومًا',180,80,26,'#4a2a14',{stroke:'#fbe7c4'});
+    K.slide(tl,q1,L(0.2));
+    K.hide(tl,q1,L(1.9));
+    var tGone=T(g,'كيف اختفت',180,74,30,'#4a2a14',{stroke:'#fbe7c4'});
+    K.slide(tl,tGone,L(2.0));
+    var tDino=T(g,'الديناصورات؟',180,128,48,'#e4572e',{stroke:'#fbe7c4',sw:6});
+    K.slam(tl,tDino,L(2.8));
+    var tSud=T(g,'فجأة!',290,190,26,'#4a2a14',{stroke:'#fbe7c4'});
+    K.pop(tl,tSud,L(3.65));
+    K.hide(tl,[tGone,tDino,tSud],L(4.5));
+    var tStrong=T(g,'الأقوى',180,96,46,'#4a2a14',{stroke:'#fbe7c4',sw:6});
+    K.slam(tl,tStrong,L(5.9));
+    tl.to(rex.g,{scale:1.06,svgOrigin:'20 0',duration:0.15,yoyo:true,repeat:3},L(6.0));
+    var tRule=T(g,'والمسيطرة على الأرض',180,140,24,'#4a2a14',{stroke:'#fbe7c4'});
+    K.slide(tl,tRule,L(6.9));
+    K.hide(tl,[tStrong,tRule],L(8.6));
+    var tYears=T(g,'',180,104,40,'#e4572e',{stroke:'#fbe7c4',sw:5});
+    K.count(tl,tYears,function(v){return v+' مليون سنة';},0,160,L(9.3),1.4);
+    K.slam(tl,tYears,L(9.3));
+  }},
+
+  // ===== 2. The asteroid and the impact (11.4 – 27.8) =====
+  {at:AT.rock, build:function(g,tl,K){
+    var S=K.S, T=K.T, L=function(t){return t-AT.rock;};
+    // a. Space: orbits cross
+    var a=sub(S,g,'#070b1c');
+    for(var s=0;s<45;s++) S('circle',{cx:K.rr(0,360),cy:K.rr(0,640),r:K.rr(0.6,1.6),fill:'#ffffff',opacity:K.rr(0.3,0.9)},a);
+    S('circle',{cx:-60,cy:330,r:90,fill:'#ffb347'},a);
+    var orbit=S('path',{d:'M-60 90 A240 240 0 0 1 -60 570',fill:'none',stroke:'#9fd8ff','stroke-width':2,'stroke-dasharray':'5 7'},a);
+    var path=S('path',{d:'M380 60 Q240 240 172 330',fill:'none',stroke:'#e4572e','stroke-width':2,'stroke-dasharray':'5 7'},a);
+    var earthW=K.G(a,0,0), earth=S('g',{},earthW);
+    S('circle',{cx:172,cy:330,r:22,fill:'#2e6fb0'},earth);
+    S('path',{d:'M160 320 Q170 312 180 320 Q184 332 172 336Z',fill:'#4c8a3a'},earth);
+    var rockW=K.G(a,380,60), rock=S('g',{},rockW);
+    S('path',{d:'M-18 -6 L-8 -18 L10 -16 L20 -2 L14 14 L-6 18 L-18 8Z',fill:'#7a6a5a'},rock);
+    S('circle',{cx:-4,cy:-4,r:4,fill:'#5a4a3a'},rock); S('circle',{cx:8,cy:6,r:3,fill:'#5a4a3a'},rock);
+    var X=S('g',{opacity:0},a);
+    S('circle',{cx:172,cy:330,r:34,fill:'none',stroke:'#ffd166','stroke-width':3},X);
+    cut(tl,null,a,0);
+    var tAns=T(g,'',180,96,36,'#ffd166');
+    K.count(tl,tAns,function(v){return 'قبل '+v+' مليون سنة';},100,66,L(13.0),1.6);
+    K.slam(tl,tAns,L(13.0));
+    K.draw(tl,orbit,L(15.3),1.2);
+    K.draw(tl,path,L(16.0),1.0);
+    tl.to(X,{opacity:1,duration:0.2,yoyo:true,repeat:3},L(16.6));
+    var tCross=T(g,'تقاطع المساران',180,140,22,'#ffffff');
+    K.slide(tl,tCross,L(15.7));
+    tl.fromTo(rock,{rotation:0,svgOrigin:'0 0'},{rotation:200,svgOrigin:'0 0',duration:5,ease:'none'},L(17.4));
+    tl.to(rock,{x:-120,y:110,scale:2.2,duration:1.8,ease:'power1.in'},L(17.4));
+    K.hide(tl,[tAns,tCross],L(18.3));
+    // b. Everest comparison
+    var b=sub(S,g,'#0f1a33');
+    S('rect',{x:0,y:430,width:360,height:210,fill:'#2a3550'},b);
+    var ev=S('g',{},b);
+    S('path',{d:'M40 430 L120 250 L150 290 L190 210 L280 430Z',fill:'#5a6272'},ev);
+    S('path',{d:'M174 240 L190 210 L206 248 L196 240 L188 252 L180 238Z',fill:'#f4f8ff'},ev);
+    var bigRock=S('g',{opacity:0},b);
+    S('path',{d:'M220 250 L250 210 L300 214 L330 260 L318 320 L262 340 L222 312Z',fill:'#7a6a5a'},bigRock);
+    S('circle',{cx:262,cy:262,r:12,fill:'#5a4a3a'},bigRock); S('circle',{cx:296,cy:296,r:9,fill:'#5a4a3a'},bigRock);
+    cut(tl,a,b,L(18.55));
+    tl.to(bigRock,{opacity:1,duration:0.4},L(19.0));
+    var tEv=T(g,'≈ جبل إيفرست',180,120,34,'#ffffff');
+    K.slam(tl,tEv,L(19.6));
+    var tKm=T(g,'نحو 10 كم',270,380,20,'#ffd166');
+    K.pop(tl,tKm,L(20.2));
+    // c. Impact in Mexico
+    var c=sub(S,g,'#070b1c');
+    for(var s2=0;s2<30;s2++) S('circle',{cx:K.rr(0,360),cy:K.rr(0,300),r:K.rr(0.6,1.4),fill:'#ffffff',opacity:0.6},c);
+    S('circle',{cx:180,cy:640,r:330,fill:'#2e6fb0'},c);
+    S('path',{d:'M60 400 Q120 360 170 380 Q200 400 230 396 Q250 420 220 440 Q190 450 196 480 Q170 500 140 470 Q110 440 70 450Z',fill:'#7aa04f'},c);
+    S('path',{d:'M196 400 Q214 392 226 406 Q214 420 200 414Z',fill:'#8ab05f'},c);
+    var streak=S('line',{x1:360,y1:120,x2:212,y2:406,stroke:'#ffd166','stroke-width':6,'stroke-linecap':'round',opacity:0},c);
+    var boom=S('circle',{cx:212,cy:406,r:6,fill:'#fff3b0',opacity:0},c);
+    var wave=S('circle',{cx:212,cy:406,r:10,fill:'none',stroke:'#ffd166','stroke-width':5,opacity:0},c);
+    var fl=K.flashRect(c);
+    cut(tl,b,c,L(21.3));
+    var tMex=T(g,'المكسيك',150,520,22,'#ffffff');
+    tMex.setAttribute('y',372); tMex._oy=364;
+    K.pop(tl,tMex,L(21.6));
+    tl.fromTo(streak,{opacity:1,attr:{x2:360,y2:120}},{attr:{x2:212,y2:406},duration:0.5,ease:'power2.in'},L(21.9));
+    tl.to(streak,{opacity:0,duration:0.1},L(22.4));
+    K.flash(tl,fl,L(22.4),0.9);
+    tl.fromTo(boom,{opacity:1,attr:{r:6}},{opacity:0.9,attr:{r:70},duration:0.6,ease:'power2.out'},L(22.4));
+    tl.to(boom,{opacity:0,duration:1.2},L(23.0));
+    tl.fromTo(wave,{opacity:1,attr:{r:10}},{opacity:0,attr:{r:240},duration:1.6,ease:'power1.out',repeat:1},L(22.45));
+    tl.to(c,{x:4,duration:0.05,yoyo:true,repeat:9},L(22.45));
+    K.hide(tl,tMex,L(22.4));
+    var tPow=T(g,'قوة تدميرية هائلة',180,100,36,'#ffd166',{sw:5});
+    K.slam(tl,tPow,L(22.8));
+    K.hide(tl,tPow,L(24.6));
+    // d. Millions of nuclear bombs
+    var d=sub(S,g,'#1a1010');
+    var grid=[];
+    for(var r=0;r<6;r++) for(var cc=0;cc<7;cc++){ var m=mushroom(S,d,40+cc*47,190+r*54,0.85); m.setAttribute('opacity',0); grid.push(m); }
+    cut(tl,c,d,L(24.6));
+    tl.to(grid,{opacity:1,duration:0.15,stagger:{each:0.035,from:'center'}},L(24.75));
+    var tN=T(g,'ملايين',180,96,46,'#ffd166',{sw:6});
+    K.slam(tl,tN,L(25.4));
+    var tB=T(g,'القنابل النووية',180,142,26,'#ffffff');
+    K.slide(tl,tB,L(26.1));
+  }},
+
+  // ===== 3. Not directly: a chain of disasters (27.8 – 45.2) =====
+  {at:AT.chain, build:function(g,tl,K){
+    var S=K.S, T=K.T, L=function(t){return t-AT.chain;};
+    // a. The question
+    var a=sub(S,g,'#3a2a3a');
+    S('path',{d:'M0 420 Q180 400 360 424 V640 H0Z',fill:'#4a3a2a'},a);
+    var rex=trex(S,a,200,500,1.1,'#8a5a3a');
+    var tQ=T(a,'؟',100,320,90,'#ffd166',{sw:7});
+    cut(tl,null,a,0);
+    var tKill=T(g,'هل قتلها مباشرة؟',180,110,34,'#ffffff');
+    K.slam(tl,tKill,L(29.9));
+    K.pop(tl,tQ,L(30.7));
+    K.hide(tl,[tKill,tQ],L(32.2));
+    var tNo=T(g,'كان مجرد البداية',180,110,34,'#ffd166');
+    K.slam(tl,tNo,L(34.2));
+    // b. Chain of disasters
+    var b=sub(S,g,'#2a1c1c');
+    var links=[];
+    for(var i=0;i<5;i++){ var l=S('ellipse',{cx:60+i*60,cy:240,rx:34,ry:18,fill:'none',stroke:'#c9d1d9','stroke-width':8,opacity:0},b); links.push(l); }
+    var icons=[];
+    [['زلازل',300,'#c96f3c'],['حرائق',180,'#e4572e'],['تسونامي',60,'#3aa6e8']].forEach(function(c,i){
+      var ic=S('g',{opacity:0},b);
+      S('circle',{cx:c[1],cy:350,r:42,fill:'#1d1414',stroke:c[2],'stroke-width':4},ic);
+      if(i===0){ S('polyline',{points:(c[1]-24)+',352 '+(c[1]-10)+',336 '+(c[1])+',362 '+(c[1]+10)+',338 '+(c[1]+24)+',352',fill:'none',stroke:c[2],'stroke-width':5,'stroke-linejoin':'round'},ic); }
+      if(i===1){ S('path',{d:'M'+c[1]+' 326 Q'+(c[1]+22)+' 350 '+(c[1]+10)+' 372 Q'+c[1]+' 380 '+(c[1]-10)+' 372 Q'+(c[1]-22)+' 350 '+c[1]+' 326Z',fill:c[2]},ic); S('path',{d:'M'+c[1]+' 350 Q'+(c[1]+8)+' 362 '+c[1]+' 372 Q'+(c[1]-8)+' 362 '+c[1]+' 350Z',fill:'#ffd166'},ic); }
+      if(i===2){ S('path',{d:'M'+(c[1]-26)+' 368 Q'+(c[1]-20)+' 330 '+(c[1]+6)+' 330 Q'+(c[1]+24)+' 332 '+(c[1]+20)+' 350 Q'+(c[1]+6)+' 340 '+(c[1]-2)+' 352 Q'+(c[1]+10)+' 368 '+(c[1]+26)+' 368Z',fill:c[2]},ic); }
+      T(ic,c[0],c[1],420,18,'#ffffff',{show:true});
+      icons.push(ic);
+    });
+    cut(tl,a,b,L(35.8));
+    tl.to(tNo,{opacity:0,duration:0.3},L(35.8));
+    tl.to(links,{opacity:1,duration:0.15,stagger:0.12},L(36.3));
+    var tChain=T(g,'سلسلة من الكوارث',180,120,34,'#ffd166');
+    K.slam(tl,tChain,L(36.8));
+    icons.forEach(function(ic,i){ tl.fromTo(ic,{opacity:0,y:30},{opacity:1,y:0,duration:0.4,ease:'back.out(2)'},L(37.2)+i*0.4); });
+    // c. Quake, fire, tsunami in one landscape
+    var c=sub(S,g,'#c9875a');
+    S('rect',{x:0,y:0,width:360,height:300,fill:'#d99a6a'},c);
+    var sea=S('rect',{x:0,y:330,width:110,height:310,fill:'#2e6fb0'},c);
+    var land=S('g',{},c);
+    S('path',{d:'M100 330 L360 330 L360 640 L100 640Z',fill:'#7a6a4a'},land);
+    var trees=[];
+    for(var t=0;t<5;t++){ var tr=S('g',{},land); S('rect',{x:146+t*42,y:290,width:6,height:40,fill:'#5a3a22'},tr); S('circle',{cx:149+t*42,cy:284,r:16,fill:'#4c7a3a'},tr); trees.push(tr); }
+    var crack=S('polyline',{points:'130,340 170,380 160,420 210,460 200,500 260,540 250,600',fill:'none',stroke:'#2a1a10','stroke-width':6,'stroke-linejoin':'round'},c);
+    var flames=[];
+    for(var f=0;f<5;f++){ var fx=149+f*42; flames.push(S('path',{d:'M'+fx+' 300 Q'+(fx+14)+' 276 '+(fx+4)+' 252 Q'+fx+' 266 '+(fx-6)+' 256 Q'+(fx-16)+' 278 '+fx+' 300Z',fill:'#ff7a2f',opacity:0},c)); }
+    var smoke=S('g',{opacity:0},c);
+    for(var sm=0;sm<6;sm++) S('circle',{cx:150+sm*36,cy:200-(sm%2)*20,r:26,fill:'#5a5050',opacity:0.7},smoke);
+    var tsu=S('path',{d:'M-200 640 L-200 300 Q-120 220 -40 260 Q-80 280 -60 330 L0 330 L0 640Z',fill:'#3aa6e8'},c);
+    var foam=S('path',{d:'M-200 300 Q-120 220 -40 260 Q-80 280 -60 330',fill:'none',stroke:'#dff5ff','stroke-width':6},c);
+    cut(tl,b,c,L(38.9));
+    tl.to(tChain,{opacity:0,duration:0.3},L(38.9));
+    var tQ2=T(g,'زلازل',180,110,40,'#4a2a14',{stroke:'#fbe7c4'});
+    K.slam(tl,tQ2,L(39.0));
+    K.draw(tl,crack,L(39.0),0.6);
+    tl.to(c,{x:5,duration:0.05,yoyo:true,repeat:13},L(39.0));
+    K.hide(tl,tQ2,L(40.1));
+    var tF=T(g,'حرائق',180,110,40,'#e4572e',{stroke:'#fbe7c4'});
+    K.slam(tl,tF,L(40.15));
+    tl.to(flames,{opacity:1,duration:0.2,stagger:0.08},L(40.2));
+    tl.to(flames,{scaleY:1.25,svgOrigin:'200 300',duration:0.18,yoyo:true,repeat:15},L(40.4));
+    tl.to(trees,{opacity:0.35,duration:1.2},L(40.6));
+    tl.to(smoke,{opacity:1,y:-30,duration:1.6},L(40.6));
+    K.hide(tl,tF,L(41.8));
+    var tT=T(g,'تسونامي',180,110,42,'#1d4a8a',{stroke:'#fbe7c4'});
+    K.slam(tl,tT,L(42.4));
+    tl.to([tsu,foam],{x:420,duration:2.2,ease:'power1.in'},L(42.0));
+    tl.to(flames,{opacity:0,duration:0.4},L(43.6));
+  }},
+
+  // ===== 4. The real disaster was in the sky (45.2 – 58.9) =====
+  {at:AT.sky, build:function(g,tl,K){
+    var S=K.S, T=K.T, L=function(t){return t-AT.sky;};
+    var a=sub(S,g,'#8ab8d8');
+    var skyDark=S('rect',{x:0,y:0,width:360,height:640,fill:'#2a2630',opacity:0},a);
+    var sun=S('circle',{cx:270,cy:120,r:36,fill:'#ffd166'},a);
+    S('path',{d:'M0 430 Q180 410 360 430 V640 H0Z',fill:'#6a5a4a'},a);
+    S('path',{d:'M120 440 Q180 400 240 440Z',fill:'#3a2a20'},a);
+    var plumes=[];
+    for(var i=0;i<40;i++){
+      var p=S('circle',{cx:K.rr(140,220),cy:430,r:K.rr(8,18),fill:i%3?'#6a6060':'#8a7a6a',opacity:0},a);
+      plumes.push(p);
+      var tx=K.rr(-160,160), ty=-K.rr(200,380);
+      tl.fromTo(p,{opacity:0,x:0,y:0},{opacity:0.85,x:tx,y:ty,duration:3.2,ease:'power1.out'},L(49.1)+i*0.06);
+    }
+    var cloud=S('g',{opacity:0},a);
+    for(var c=0;c<14;c++) S('ellipse',{cx:c*28,cy:K.rr(60,170),rx:K.rr(40,60),ry:K.rr(26,40),fill:c%2?'#4a4448':'#3e383c'},cloud);
+    var rays=S('g',{},a);
+    for(var r=0;r<5;r++) S('line',{x1:250+r*10,y1:160,x2:180+r*40,y2:420,stroke:'#ffe9a8','stroke-width':6,opacity:0.5},rays);
+    cut(tl,null,a,0);
+    var tReal=T(g,'الكارثة الحقيقية',180,110,36,'#1d2b48',{stroke:'#ffffff'});
+    K.slam(tl,tReal,L(45.9));
+    var tSky=T(g,'في السماء!',180,160,40,'#e4572e',{stroke:'#ffffff',sw:6});
+    K.slam(tl,tSky,L(48.0));
+    K.hide(tl,[tReal,tSky],L(49.4));
+    var lbl=[['غبار',80,250],['رماد',290,230],['غازات سامة',180,190]].map(function(w){ return T(g,w[0],w[1],w[2],22,'#ffffff'); });
+    K.pop(tl,lbl[0],L(50.6)); K.pop(tl,lbl[1],L(51.1)); K.pop(tl,lbl[2],L(51.6));
+    K.hide(tl,lbl,L(52.9));
+    tl.to(cloud,{opacity:1,duration:1.5},L(53.0));
+    var tCloud=T(g,'سحابة كثيفة',180,110,40,'#ffffff');
+    K.slam(tl,tCloud,L(53.5));
+    tl.to(sun,{opacity:0.15,attr:{r:30},duration:1.5},L(55.2));
+    tl.to(rays,{opacity:0,duration:1},L(55.2));
+    tl.to(skyDark,{opacity:0.85,duration:2},L(55.0));
+    K.hide(tl,tCloud,L(55.9));
+    var tBlock=T(g,'حجبت الشمس',180,110,38,'#ffd166');
+    K.slam(tl,tBlock,L(56.2));
+    var tYrs=T(g,'لعدة سنوات',180,156,26,'#ffffff');
+    K.slide(tl,tYrs,L(57.2));
+  }},
+
+  // ===== 5. Cold, dead plants, collapsing food chain (58.9 – 72.5) =====
+  {at:AT.cold, build:function(g,tl,K){
+    var S=K.S, T=K.T, L=function(t){return t-AT.cold;};
+    var a=sub(S,g,'#3a3a48');
+    S('path',{d:'M0 430 Q180 410 360 430 V640 H0Z',fill:'#5a5a4a'},a);
+    var snow=S('path',{d:'M0 430 Q180 410 360 430 V640 H0Z',fill:'#e8f0f8',opacity:0},a);
+    var ferns=[];
+    for(var i=0;i<6;i++){ ferns.push(fern(S,a,30+i*60,440+(i%2)*8,1,'#3f7a3f')); }
+    // thermometer
+    var th=S('g',{},a);
+    S('rect',{x:288,y:180,width:28,height:200,rx:14,fill:'#f4f8ff',stroke:'#9aa6bd','stroke-width':3},th);
+    S('circle',{cx:302,cy:392,r:24,fill:'#e4572e'},th);
+    var merc=S('rect',{x:296,y:200,width:12,height:190,rx:6,fill:'#e4572e'},th);
+    var flakes=[];
+    for(var f=0;f<30;f++) flakes.push(S('circle',{cx:K.rr(0,360),cy:K.rr(-300,0),r:K.rr(1.5,3),fill:'#ffffff',opacity:0},a));
+    cut(tl,null,a,0);
+    var tNoSun=T(g,'غياب الشمس',180,100,34,'#ffd166');
+    K.slam(tl,tNoSun,L(59.5));
+    K.hide(tl,tNoSun,L(60.4));
+    var tCold=T(g,'هبطت الحرارة',150,100,36,'#9fd8ff');
+    K.slam(tl,tCold,L(60.5));
+    tl.to(merc,{attr:{y:350,height:40},duration:1.8,ease:'power2.in'},L(60.5));
+    tl.to(merc,{attr:{fill:'#3aa6e8'},duration:1.8},L(60.5));
+    tl.to(flakes,{opacity:0.9,duration:0.2},L(60.8));
+    tl.to(flakes,{y:'+=700',duration:4,ease:'none',repeat:2,stagger:0.05},L(60.8));
+    tl.to(snow,{opacity:0.85,duration:2.5},L(61.2));
+    K.hide(tl,tCold,L(62.8));
+    var tPlant=T(g,'ماتت النباتات',180,100,36,'#c9a66a');
+    K.slam(tl,tPlant,L(62.9));
+    ferns.forEach(function(fr,i){ tl.to(fr,{opacity:0.5,duration:0.8},L(63.0)+i*0.1); tl.to(fr.children,{attr:{stroke:'#8a6a3a'},duration:0.8},L(63.0)+i*0.1); });
+    // b. Food chain collapses
+    var b=sub(S,g,'#2a2a34');
+    var plant=fern(S,b,70,420,1.4,'#3f7a3f');
+    var herb=sauropod(S,b,180,430,0.45,'#6b8f47');
+    var rex=trex(S,b,300,430,0.5,'#8a5a3a');
+    var arr1=S('path',{d:'M104 380 L140 380 M132 372 L140 380 L132 388',fill:'none',stroke:'#ffd166','stroke-width':4,'stroke-linecap':'round'},b);
+    var arr2=S('path',{d:'M222 380 L258 380 M250 372 L258 380 L250 388',fill:'none',stroke:'#ffd166','stroke-width':4,'stroke-linecap':'round'},b);
+    var lbls=[T(b,'نباتات',70,480,18,'#ffffff',{show:true}),T(b,'العاشبة',190,480,18,'#ffffff',{show:true}),T(b,'اللاحمة',300,480,18,'#ffffff',{show:true})];
+    var x1=S('path',{d:'M110 368 L134 392 M134 368 L110 392',stroke:'#e4572e','stroke-width':5,'stroke-linecap':'round',opacity:0},b);
+    var x2=S('path',{d:'M228 368 L252 392 M252 368 L228 392',stroke:'#e4572e','stroke-width':5,'stroke-linecap':'round',opacity:0},b);
+    cut(tl,a,b,L(64.6));
+    tl.to(tPlant,{opacity:0,duration:0.3},L(64.6));
+    var tChain=T(g,'السلسلة الغذائية',180,110,34,'#ffd166');
+    K.slam(tl,tChain,L(65.5));
+    tl.to(plant.children,{attr:{stroke:'#8a6a3a'},duration:0.5},L(66.2));
+    tl.to(x1,{opacity:1,duration:0.2},L(66.3));
+    K.hide(tl,tChain,L(66.6));
+    var tHung=T(g,'جوعًا',180,110,44,'#e4572e');
+    K.slam(tl,tHung,L(68.6));
+    tl.to(herb.g,{rotation:-80,svgOrigin:'0 0',y:6,duration:0.9,ease:'power2.in'},L(67.4));
+    tl.to(herb.g,{opacity:0.5,duration:0.5},L(68.3));
+    tl.to(x2,{opacity:1,duration:0.2},L(69.4));
+    K.hide(tl,tHung,L(69.4));
+    var tCarn=T(g,'ولحقتها اللاحمة',180,110,34,'#ffffff');
+    K.slide(tl,tCarn,L(69.5));
+    tl.to(rex.g,{rotation:-75,svgOrigin:'20 0',y:6,duration:0.9,ease:'power2.in'},L(70.6));
+    tl.to(rex.g,{opacity:0.5,duration:0.5},L(71.5));
+  }},
+
+  // ===== 6. Extinction, then a new chapter for mammals (72.5 – 89.56) =====
+  {at:AT.end, build:function(g,tl,K){
+    var S=K.S, T=K.T, L=function(t){return t-AT.end;};
+    // a. Fossil in rock layers
+    var a=sub(S,g,'#6a5040');
+    [['#8a6a4a',200],['#7a5a3a',280],['#6a4a2e',360],['#5a3e26',440],['#4a3220',520]].forEach(function(l){ S('rect',{x:0,y:l[1],width:360,height:80,fill:l[0]},a); });
+    var bones=S('g',{opacity:0},a);
+    S('path',{d:'M70 420 Q130 380 200 392 Q250 400 300 380',fill:'none',stroke:'#efe3cc','stroke-width':6,'stroke-linecap':'round'},bones);
+    for(var r=0;r<7;r++) S('path',{d:'M'+(120+r*18)+' '+(392-(r%2))+' q4 30 -6 46',fill:'none',stroke:'#efe3cc','stroke-width':4,'stroke-linecap':'round'},bones);
+    S('path',{d:'M300 380 L332 372 L340 392 L312 398Z',fill:'#efe3cc'},bones);
+    S('path',{d:'M70 420 Q40 430 20 450',fill:'none',stroke:'#efe3cc','stroke-width':5,'stroke-linecap':'round'},bones);
+    cut(tl,null,a,0);
+    tl.to(bones,{opacity:1,duration:0.6},L(72.8));
+    var tExt=T(g,'انقرضت',180,110,50,'#e4572e',{stroke:'#fbe7c4',sw:6});
+    K.slam(tl,tExt,L(73.6));
+    K.hide(tl,tExt,L(75.5));
+    // b. 75% of life
+    var b=sub(S,g,'#1d1d28');
+    var dots=[];
+    for(var i=0;i<20;i++){ var dd=S('circle',{cx:70+(i%5)*55,cy:230+Math.floor(i/5)*55,r:18,fill:['#7bd3b0','#ffd166','#9fd8ff','#f29e4c','#c9a6ff'][i%5]},b); dots.push(dd); }
+    cut(tl,a,b,L(75.6));
+    var tPct=T(g,'',180,120,54,'#e4572e',{sw:6,ltr:true});
+    K.count(tl,tPct,function(v){return v+'%';},0,75,L(76.8),1.2);
+    K.slam(tl,tPct,L(76.8));
+    dots.forEach(function(d,i){ if(i<15) tl.to(d,{attr:{fill:'#4a4a55'},duration:0.15},L(76.9)+i*0.07); });
+    var tLife=T(g,'من أشكال الحياة',180,166,26,'#ffffff');
+    K.slide(tl,tLife,L(77.8));
+    K.hide(tl,[tPct,tLife],L(79.3));
+    // c. A book closes, a new chapter opens
+    var c=sub(S,g,'#14172b');
+    var bookL=S('rect',{x:60,y:230,width:120,height:160,rx:4,fill:'#7a2e2e'},c);
+    var pageR=S('rect',{x:180,y:230,width:120,height:160,rx:4,fill:'#efe0c0'},c);
+    var pTxt=T(c,'العمالقة',240,318,22,'#7a2e2e',{show:true,sw:0});
+    var flip=S('g',{},c);
+    S('rect',{x:180,y:230,width:120,height:160,rx:4,fill:'#e0cfa8'},flip);
+    cut(tl,b,c,L(79.3));
+    var tFold=T(g,'طُوي فصل العمالقة',180,120,34,'#ffd166');
+    K.slam(tl,tFold,L(79.5));
+    tl.fromTo(flip,{scaleX:1,svgOrigin:'180 310'},{scaleX:-1,svgOrigin:'180 310',duration:0.9,ease:'power2.inOut'},L(80.3));
+    tl.to(pTxt,{opacity:0,duration:0.2},L(80.5));
+    K.hide(tl,tFold,L(81.8));
+    // d. Small mammals survive and evolve
+    var d=sub(S,g,'#bfe3f0');
+    var sun=S('circle',{cx:290,cy:110,r:34,fill:'#ffd166',opacity:0},d);
+    S('path',{d:'M0 430 Q180 410 360 430 V640 H0Z',fill:'#7a9a4a'},d);
+    S('ellipse',{cx:110,cy:440,rx:40,ry:14,fill:'#3a2a1a'},d);
+    var sprouts=[];
+    for(var s=0;s<6;s++){ var sp=fern(S,d,30+s*60,440,0.6,'#5e9a3e'); sp.setAttribute('opacity',0); sprouts.push(sp); }
+    var mm=mammal(S,d,110,440,1.3);
+    tl.set(mm.g,{y:30,opacity:0},0);
+    var evo=S('g',{opacity:0},d);
+    var e1=mammal(S,evo,80,300,0.9);
+    S('path',{d:'M122 286 L150 286 M142 278 L150 286 L142 294',fill:'none',stroke:'#1d2b48','stroke-width':3,'stroke-linecap':'round'},evo);
+    var monkey=S('g',{},evo);
+    S('ellipse',{cx:190,cy:282,rx:16,ry:20,fill:'#8a6a4a'},monkey); S('circle',{cx:190,cy:252,r:13,fill:'#8a6a4a'},monkey); S('circle',{cx:190,cy:254,r:8,fill:'#c99a70'},monkey);
+    S('path',{d:'M206 290 Q226 300 222 270',fill:'none',stroke:'#8a6a4a','stroke-width':4},monkey);
+    S('path',{d:'M232 286 L260 286 M252 278 L260 286 L252 294',fill:'none',stroke:'#1d2b48','stroke-width':3,'stroke-linecap':'round'},evo);
+    K.person(evo,296,310,0.8,{shirt:'#2e5cb8',skin:'#e0b08a',hair:'#2d2440'});
+    cut(tl,c,d,L(81.8));
+    tl.to(sun,{opacity:1,duration:1},L(82.0));
+    tl.to(sprouts,{opacity:1,duration:0.4,stagger:0.12},L(82.4));
+    tl.to(mm.g,{y:0,opacity:1,duration:0.6,ease:'back.out(2)'},L(83.3));
+    var tNew=T(g,'فصل جديد',180,100,40,'#1d2b48',{stroke:'#ffffff'});
+    K.slam(tl,tNew,L(82.4));
+    var tMam=T(g,'الثدييات الصغيرة',180,146,26,'#8a5a3a',{stroke:'#ffffff'});
+    K.slide(tl,tMam,L(83.5));
+    K.hide(tl,[tNew,tMam],L(85.6));
+    tl.to(evo,{opacity:1,duration:0.5},L(85.2));
+    var tToday=T(g,'عالمنا اليوم!',180,120,44,'#2e5cb8',{stroke:'#ffffff',sw:6});
+    K.slam(tl,tToday,L(87.0));
+  }}
+  ]
+});
+})();
+</script>
