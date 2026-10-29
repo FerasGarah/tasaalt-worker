@@ -5,15 +5,22 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 class LlmError extends Error {}
 
-async function chat({ key, model, messages, maxTokens = 8000, json = false, temperature = 0.5, shouldStop, label = '', log }) {
-  let useJson = json, maxT = maxTokens, last;
+// thinking: true → DeepSeek V4 "thinking" mode (better plans/drawings, slower). Its reasoning counts against
+// max_tokens, so thinking calls get a large allowance; if the answer is still cut off we retry without thinking.
+async function chat({ key, model, messages, maxTokens, json = false, temperature = 0.5, thinking = true, shouldStop, label = '', log }) {
+  let useJson = json, think = thinking, sendThinking = true, last;
+  let maxT = maxTokens || (think ? 64000 : 16000);
   for (let attempt = 0; attempt < 5; attempt++) {
     if (shouldStop && shouldStop()) throw new LlmError('أُوقفت العملية');
-    const body = { model, messages, max_tokens: maxT, temperature, stream: true, stream_options: { include_usage: true } };
-    if (useJson) body.response_format = { type: 'json_object' };
+    const body = { model, messages, max_tokens: maxT, stream: true, stream_options: { include_usage: true } };
+    if (sendThinking) body.thinking = { type: think ? 'enabled' : 'disabled' };
+    if (!think) body.temperature = temperature;
+    if (useJson && !think) body.response_format = { type: 'json_object' };
     const ctrl = new AbortController();
     const stopTimer = setInterval(() => { if (shouldStop && shouldStop()) ctrl.abort(); }, 1000);
-    const hardTimer = setTimeout(() => ctrl.abort(), 15 * 60 * 1000);
+    const hardTimer = setTimeout(() => ctrl.abort(), 25 * 60 * 1000);
+    const t0 = Date.now(); let reasoning = 0;
+    const aliveTimer = setInterval(() => { log && log(`… DeepSeek ما زال يعمل على «${label}» (${Math.round((Date.now() - t0) / 60000)} د${reasoning ? '، يفكّر' : ''})`); }, 120000);
     try {
       const r = await fetch(BASE + '/chat/completions', {
         method: 'POST', signal: ctrl.signal,
@@ -25,6 +32,7 @@ async function chat({ key, model, messages, maxTokens = 8000, json = false, temp
         let msg = txt; try { msg = JSON.parse(txt).error.message; } catch (_) {}
         if (r.status === 401) throw new LlmError('مفتاح DeepSeek غير صحيح أو أُلغي. حدّثه من الإعدادات.');
         if (r.status === 402) throw new LlmError('رصيد DeepSeek انتهى (Insufficient Balance). اشحن الرصيد من platform.deepseek.com ثم أعد المحاولة.');
+        if (r.status === 400 && sendThinking && /thinking/i.test(msg)) { sendThinking = false; continue; }
         if (r.status === 400 && useJson && /response_format|json/i.test(msg)) { useJson = false; continue; }
         if (r.status === 400 && /max_tokens|maximum/i.test(msg) && maxT > 4096) { maxT = Math.max(4096, Math.floor(maxT / 2)); continue; }
         if (r.status === 400 && /model/i.test(msg)) throw new LlmError(`النموذج "${model}" غير متاح في حسابك. اختر نموذجًا آخر من الإعدادات. (${msg})`);
@@ -47,19 +55,26 @@ async function chat({ key, model, messages, maxTokens = 8000, json = false, temp
           const c = j.choices && j.choices[0];
           if (c) {
             if (c.delta && typeof c.delta.content === 'string') content += c.delta.content;
+            if (c.delta && typeof c.delta.reasoning_content === 'string') reasoning += c.delta.reasoning_content.length;
             if (c.finish_reason) finish = c.finish_reason;
           }
         }
       }
-      if (!content.trim()) { last = new LlmError('DeepSeek أعاد ردًا فارغًا'); await sleep(3000); continue; }
-      return { content, usage: usage || {}, finish, json: useJson };
+      if (finish === 'length' || !content.trim()) {
+        // Ran out of room (usually the thinking used it all): retry without thinking, then with more room.
+        if (think) { think = false; maxT = Math.max(maxT, 16000); log && log(`«${label}»: التفكير استهلك مساحة الرد — إعادة المحاولة بدون تفكير…`); continue; }
+        if (maxT < 64000) { maxT = Math.min(64000, maxT * 2); log && log(`«${label}»: الرد طويل — إعادة المحاولة بمساحة أكبر…`); continue; }
+        last = new LlmError(content.trim() ? 'رد DeepSeek طويل جدًا وانقطع' : 'DeepSeek أعاد ردًا فارغًا');
+        await sleep(3000); continue;
+      }
+      return { content, usage: usage || {}, finish, json: useJson, thinking: think };
     } catch (e) {
       if (e instanceof LlmError) throw e;
       if (shouldStop && shouldStop()) throw new LlmError('أُوقفت العملية');
       last = new LlmError('انقطع الاتصال بـ DeepSeek: ' + (e.message || e));
       log && log(`إعادة المحاولة (${label})…`);
       await sleep(4000 * (attempt + 1));
-    } finally { clearInterval(stopTimer); clearTimeout(hardTimer); }
+    } finally { clearInterval(stopTimer); clearTimeout(hardTimer); clearInterval(aliveTimer); }
   }
   throw last || new LlmError('تعذر الحصول على رد من DeepSeek');
 }
