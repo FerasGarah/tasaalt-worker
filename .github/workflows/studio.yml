@@ -1,4 +1,6 @@
 # Tasaalt Studio — cloud worker. Started by the studio server; do not run by hand.
+# The studio address and key live in encrypted repository secrets (STUDIO_SERVER, STUDIO_KEY),
+# so nothing private appears in the run logs even when this repository is public.
 name: studio
 run-name: "${{ inputs.task }} · ${{ inputs.job }}"
 
@@ -6,17 +8,11 @@ on:
   workflow_dispatch:
     inputs:
       task:
-        description: "ping | preview | render | align"
+        description: "ping | preview | render | align | generate"
         required: true
         default: ping
       job:
         description: "Job id"
-        required: true
-      server:
-        description: "Studio worker URL"
-        required: true
-      token:
-        description: "One-time job secret"
         required: true
 
 permissions:
@@ -24,17 +20,9 @@ permissions:
 
 jobs:
   work:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
-    env:
-      TASK: ${{ inputs.task }}
-      JOB: ${{ inputs.job }}
-      SERVER: ${{ inputs.server }}
-      TOKEN: ${{ inputs.token }}
     steps:
-      - name: Hide secret
-        run: echo "::add-mask::$TOKEN"
-
       - uses: actions/checkout@v5
 
       - uses: actions/setup-node@v5
@@ -51,10 +39,21 @@ jobs:
 
       - name: Work
         run: node worker.js
+        env:
+          TASK: ${{ inputs.task }}
+          JOB: ${{ inputs.job }}
+          SERVER: ${{ secrets.STUDIO_SERVER }}
+          STUDIO_KEY: ${{ secrets.STUDIO_KEY }}
+          DEEPSEEK_KEY: ${{ secrets.DEEPSEEK_KEY }}
 
       - name: Report failure to the studio
         if: failure() || cancelled()
+        env:
+          JOB: ${{ inputs.job }}
+          SERVER: ${{ secrets.STUDIO_SERVER }}
+          STUDIO_KEY: ${{ secrets.STUDIO_KEY }}
         run: |
+          TOKEN=$(printf '%s' "$JOB" | openssl dgst -sha256 -hmac "$STUDIO_KEY" | awk '{print $NF}')
           curl -sS -m 30 -X POST -H "Content-Type: application/json" \
             -d '{"ok":false,"error":"توقف العامل السحابي (فشل التثبيت أو أُلغي التشغيل). راجع سجل GitHub Actions."}' \
             "$SERVER?a=finish&job=$JOB&t=$TOKEN" || true
