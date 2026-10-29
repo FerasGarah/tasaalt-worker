@@ -108,14 +108,15 @@ function chapterPlanText(c) {
 function captionsIn(a, c) { return a.captions.filter(x => x[0] >= c.at - 0.05 && x[0] < c.end).map(x => `${(+x[0]).toFixed(2)} ${x[1]}`).join('\n'); }
 
 // ---------- main ----------
-async function generate({ aligned, engineSrc, workDir, key, model, log, progress, shouldStop, previous, note }) {
+async function generate({ aligned, engineSrc, workDir, key, model, thinking = true, log, progress, shouldStop, previous, note }) {
   const a = { length: +aligned.length, words: aligned.words.map(w => ({ w: String(w.w), t: +w.t })), pauses: aligned.pauses || [], captions: aligned.captions || [] };
   if (!a.words.length) throw new Error('ملف التوقيت لا يحتوي كلمات. أعد المطابقة.');
   const system = { role: 'system', content: systemPrompt(engineSrc) };
-  const usage = { prompt: 0, completion: 0, cached: 0, calls: 0 };
+  const usage = { prompt: 0, completion: 0, cached: 0, calls: 0, reasoning: 0 };
   const ask = async (content, opts = {}) => {
-    const r = await chat({ key, model, messages: [system, { role: 'user', content }], shouldStop, log, ...opts });
+    const r = await chat({ key, model, messages: [system, { role: 'user', content }], shouldStop, log, thinking: opts.think === false ? false : thinking, ...opts });
     usage.calls++; usage.prompt += r.usage.prompt_tokens || 0; usage.completion += r.usage.completion_tokens || 0; usage.cached += r.usage.prompt_cache_hit_tokens || 0;
+    usage.reasoning = (usage.reasoning || 0) + ((r.usage.completion_tokens_details && r.usage.completion_tokens_details.reasoning_tokens) || 0);
     return r;
   };
   const report = { model, started: new Date().toISOString(), steps: [], repaired: [], fallback: [], warnings: {} };
@@ -128,7 +129,7 @@ async function generate({ aligned, engineSrc, workDir, key, model, log, progress
     plan = previous.plan; helpers = previous.helpers || ''; previous.chapters.forEach(c => { codes[c.key] = c.code; });
     log('قراءة ملاحظتك وتحديد المشاهد التي ستتغير…'); progress(0.08);
     const list = plan.chapters.map(c => `${c.key} · ${c.at.toFixed(2)}–${c.end.toFixed(2)} s · ${c.idea}`).join('\n');
-    const r = await ask(fill(P('edit'), { NOTE: note, CHAPTERS: list }), { json: true, maxTokens: 3000, temperature: 0.3, label: 'edit' });
+    const r = await ask(fill(P('edit'), { NOTE: note, CHAPTERS: list }), { json: true, temperature: 0.3, think: false, label: 'edit' });
     const j = parseJson(r.content);
     reply = String(j.reply || '');
     const todo = (j.chapters || []).filter(x => x && plan.chapters.some(c => c.key === x.key));
@@ -154,7 +155,7 @@ async function generate({ aligned, engineSrc, workDir, key, model, log, progress
           LENGTH: a.length.toFixed(2), WORDS: wordsTable(a.words, 0, a.words.length, true),
           PAUSES: a.pauses.map(p => (+p[0]).toFixed(2) + '-' + (+p[1]).toFixed(2)).join(', '),
           CAPTIONS: a.captions.map(c => (+c[0]).toFixed(2) + ' ' + c[1]).join('\n'), EXTRA: extra
-        }), { json: true, maxTokens: 8000, temperature: 0.6, label: 'plan' });
+        }), { json: true, temperature: 0.6, label: 'plan' });
         plan = normalizePlan(parseJson(r.content), a);
       } catch (e) { if (/أُوقفت|مفتاح|رصيد|النموذج/.test(e.message)) throw e; log('إعادة التخطيط: ' + e.message); }
     }
@@ -168,7 +169,7 @@ async function generate({ aligned, engineSrc, workDir, key, model, log, progress
       log('رسم الشخصيات والأدوات المشتركة: ' + plan.helpers.map(h => h.name).join('، '));
       const spec = plan.helpers.map(h => `- ${h.signature || h.name + '(S,p,x,y,s)'} → returns ${h.returns || 'group'}: ${h.draw || h.description || ''}`).join('\n');
       for (let attempt = 0; attempt < 2; attempt++) {
-        const r = await ask(fill(P('helpers'), { LOOK: plan.look, HELPERS: spec }), { maxTokens: 8000, temperature: 0.5, label: 'helpers' });
+        const r = await ask(fill(P('helpers'), { LOOK: plan.look, HELPERS: spec }), { temperature: 0.5, label: 'helpers' });
         const code = extractCode(r.content);
         const err = checkSyntax(code, false);
         const missing = plan.helpers.filter(h => !new RegExp('function\\s+' + h.name + '\\s*\\(').test(code)).map(h => h.name);
@@ -201,11 +202,13 @@ async function generate({ aligned, engineSrc, workDir, key, model, log, progress
       WORDS: wordsTable(a.words, c.firstWord, c.lastWord, false), CAPTIONS: captionsIn(a, c), PLAN: chapterPlanText(c), HELPERS: helperText, EXTRA: extra
     });
     for (let attempt = 0; attempt < 3; attempt++) {
-      const r = await ask(content, { maxTokens: 8000, temperature: 0.55, label: c.key });
+      let r;
+      try { r = await ask(content, { temperature: 0.55, label: c.key, think: attempt === 0 ? undefined : false }); }
+      catch (e) { if (/أُوقفت|مفتاح|رصيد|النموذج/.test(e.message)) throw e; log(`تعذر كتابة المشهد «${c.key}»: ${e.message}`); return null; }
       const code = extractCode(r.content);
       const err = !looksLikeChapter(code) ? 'The answer must be exactly one function expression `function(g,tl,K){ … }` inside a ```js block.' : checkSyntax(code, true);
       if (!err && !/Math\.random|setTimeout|setInterval|document\.|textPath/.test(code)) return code;
-      log(`تصحيح صياغة المشهد «${c.key}»…`);
+      log(`تصحيح صياغة المشهد «${c.key}»: ${String(err || 'استخدام دالة غير مسموحة').slice(0, 120)}`);
       content = fill(P('repair'), { KEY: c.key, AT: c.at.toFixed(2), END: c.end.toFixed(2), CODE: code.slice(0, 20000),
         ISSUES: '- ' + (err || 'Forbidden API used (Math.random / setTimeout / document / textPath). Use K.rr / timeline tweens only.'), WORDS: wordsTable(a.words, c.firstWord, c.lastWord, false) });
     }
@@ -246,7 +249,7 @@ async function generate({ aligned, engineSrc, workDir, key, model, log, progress
       const content = fill(P('repair'), { KEY: c.key, AT: c.at.toFixed(2), END: c.end.toFixed(2), CODE: best[c.key].code,
         ISSUES: iss.hard.concat(iss.soft).map(x => '- ' + x).join('\n'), WORDS: wordsTable(a.words, c.firstWord, c.lastWord, false) });
       try {
-        const r = await ask(content, { maxTokens: 8000, temperature: 0.3, label: 'fix ' + c.key });
+        const r = await ask(content, { temperature: 0.3, think: false, label: 'fix ' + c.key });
         const code = extractCode(r.content);
         if (looksLikeChapter(code) && !checkSyntax(code, true)) { codes[c.key] = code; if (!report.repaired.includes(c.key)) report.repaired.push(c.key); }
       } catch (e) { if (/أُوقفت|رصيد|مفتاح/.test(e.message)) throw e; log('تعذر الإصلاح: ' + e.message); }
