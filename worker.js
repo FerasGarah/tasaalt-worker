@@ -1,11 +1,14 @@
 // Tasaalt Studio — cloud worker. Runs on GitHub Actions, talks to the studio server over HTTPS.
-// Env: TASK (ping|preview|render|align), JOB, SERVER (…/worker.php), TOKEN
+// Env: TASK (ping|preview|render|align), JOB, SERVER (…/worker.php), STUDIO_KEY
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
 
-const { TASK, JOB, SERVER, TOKEN } = process.env;
-if (!JOB || !SERVER || !TOKEN) { console.error('Missing JOB/SERVER/TOKEN'); process.exit(1); }
+const crypto = require('crypto');
+const { TASK, JOB, SERVER, STUDIO_KEY } = process.env;
+if (!JOB || !SERVER || !STUDIO_KEY) { console.error('Missing JOB / STUDIO_SERVER / STUDIO_KEY secrets. Open the studio settings and press "update worker files".'); process.exit(1); }
+// Per-job secret, derived from the shared key — the same value the server computes.
+const TOKEN = process.env.TOKEN || crypto.createHmac('sha256', STUDIO_KEY).update(JOB).digest('hex');
 const WORK = path.join(os.tmpdir(), 'studio-' + JOB);
 fs.mkdirSync(WORK, { recursive: true });
 
@@ -126,6 +129,35 @@ async function main() {
       await upload('video.mp4', out);
       progress(0.99);
     }
+  } else if (type === 'generate') {
+    const key = process.env.DEEPSEEK_KEY;
+    if (!key) throw new Error('مفتاح DeepSeek غير محفوظ في GitHub. احفظه من إعدادات الاستوديو.');
+    const opts = start.opts || {};
+    const aligned = path.join(WORK, 'aligned.json');
+    await download('aligned.json', aligned);
+    await download('story-engine.js', path.join(WORK, 'story-engine.js'));
+    let previous = null;
+    if (opts.note) { const gf = path.join(WORK, 'gen-prev.json'); await download('gen.json', gf); previous = JSON.parse(fs.readFileSync(gf, 'utf8')); }
+    const { generate } = require('./gen/generate');
+    const r = await generate({
+      aligned: JSON.parse(fs.readFileSync(aligned, 'utf8')), engineSrc: fs.readFileSync(path.join(WORK, 'story-engine.js'), 'utf8'),
+      workDir: WORK, key, model: opts.model || 'deepseek-chat', note: opts.note || '', previous,
+      log, progress, shouldStop: () => stopFlag
+    });
+    const html = path.join(WORK, 'episode.html');
+    fs.writeFileSync(html, r.html);
+    fs.writeFileSync(path.join(WORK, 'gen.json'), JSON.stringify(r.gen));
+    const u = r.gen.report.usage;
+    log(`استهلاك DeepSeek: ${u.calls} طلبًا — ${u.prompt} توكن مُدخل (${u.cached} من الذاكرة المؤقتة) و${u.completion} توكن مُخرج.`);
+    log('صنع صورة المعاينة…');
+    progress(0.9);
+    const render = require('./lib/render');
+    const outDir = path.join(WORK, 'preview');
+    await render.preview({ html, outDir, count: 12 });
+    await upload('episode.html', html);
+    await upload('gen.json', path.join(WORK, 'gen.json'));
+    for (const f of fs.readdirSync(outDir).filter(f => f.endsWith('.png'))) await upload('preview/' + f, path.join(outDir, f));
+    progress(0.99);
   } else if (type === 'align') {
     const { transcribe } = require('./lib/transcribe');
     const voice = path.join(WORK, start.voice || 'voice.mp3');
