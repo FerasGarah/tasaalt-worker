@@ -141,14 +141,14 @@ async function main() {
     const { generate } = require('./gen/generate');
     const r = await generate({
       aligned: JSON.parse(fs.readFileSync(aligned, 'utf8')), engineSrc: fs.readFileSync(path.join(WORK, 'story-engine.js'), 'utf8'),
-      workDir: WORK, key, model: opts.model || 'deepseek-chat', note: opts.note || '', previous,
+      workDir: WORK, key, model: opts.model || 'deepseek-chat', thinking: opts.thinking !== false, note: opts.note || '', previous,
       log, progress, shouldStop: () => stopFlag
     });
     const html = path.join(WORK, 'episode.html');
     fs.writeFileSync(html, r.html);
     fs.writeFileSync(path.join(WORK, 'gen.json'), JSON.stringify(r.gen));
     const u = r.gen.report.usage;
-    log(`استهلاك DeepSeek: ${u.calls} طلبًا — ${u.prompt} توكن مُدخل (${u.cached} من الذاكرة المؤقتة) و${u.completion} توكن مُخرج.`);
+    log(`استهلاك DeepSeek: ${u.calls} طلبًا — ${u.prompt} توكن مُدخل (${u.cached} من الذاكرة المؤقتة) و${u.completion} توكن مُخرج${u.reasoning ? ` (منها ${u.reasoning} تفكير)` : ''}.`);
     log('صنع صورة المعاينة…');
     progress(0.9);
     const render = require('./lib/render');
